@@ -6,7 +6,6 @@ int main(int argc, char* argv[]) {
     // Initialize MPI
     MPI_Init(&argc, &argv);
 
-    // Main process
     int mpi_root = 0;
 
     // Get the total process count and the calling process rank
@@ -58,18 +57,16 @@ int main(int argc, char* argv[]) {
             send_counts[i] = base_partition;
         }
 
-        // If the load isn't perfectly divisible, distribute the remaining amongst some processes
+        // If the load isn't perfectly divisible, distribute the remainder amongst some processes
         int k = remainder;
-        if(k) {
-            for(int i = 0; i < process_count; i++) {
-                send_counts[i]++;
-                k--;
-                if(!k) // stop when all remaining numbers have been distributed
-                    break;
-            }
+        int j = -1;
+        while(k) {
+            send_counts[j = (j + 1) % process_count]++; // var = (var + 1) % cap increments till cap and wraps around
+            k--;
         }
 
-        // Displacements calculation for MPI_Scatterv()
+
+        // Displacements calculation for Scatterv
         for(int i = 1; i < process_count; i++) {
             displacements[i] = displacements[i - 1] + send_counts[i - 1];
         }
@@ -83,7 +80,7 @@ int main(int argc, char* argv[]) {
             fflush(stdout);
             printf("P%d | %d\n", i, send_counts[i]);
         }
-        puts("=========================");
+        puts("=========================\n");
 
         free(vector);
         vector = NULL;
@@ -94,9 +91,10 @@ int main(int argc, char* argv[]) {
     MPI_Scatter(send_counts, 1, MPI_INT, &n_count, 1, MPI_INT, mpi_root, MPI_COMM_WORLD );
     float* receive_buffer = calloc(n_count, sizeof(float));
 
-    MPI_Barrier(MPI_COMM_WORLD);
-    MPI_Scatterv(vector, send_counts, displacements, MPI_FLOAT, receive_buffer, n_count,
-         MPI_INT, mpi_root, MPI_COMM_WORLD);
+    // Segfault requires fixing, some Scatterv shit happenning
+    // MPI_Barrier(MPI_COMM_WORLD);
+    // MPI_Scatterv(vector, send_counts, displacements, MPI_FLOAT, receive_buffer, n_count,
+    //      MPI_INT, mpi_root, MPI_COMM_WORLD);
 
     // DEBUG
     // for(int i = 0; i < n_count; i++) {
