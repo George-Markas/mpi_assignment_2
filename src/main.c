@@ -6,18 +6,18 @@ int main(int argc, char* argv[]) {
     // Initialize MPI
     MPI_Init(&argc, &argv);
 
-    int mpi_root = 0;
-
-    // Get the total process count and the calling process rank
+    // Get total process count and calling process rank
     int process_id, process_count;
     MPI_Comm_rank(MPI_COMM_WORLD, &process_id);
     MPI_Comm_size(MPI_COMM_WORLD, &process_count);
 
-    int* send_counts = calloc(process_count, sizeof(int));
-    int* displacements = calloc(process_count, sizeof(int));
+    const int mpi_root = 0; // Main process
+    int n_count; // How many numbers the process is going to receive
+    int* receive_counts = calloc(process_count, sizeof(int)); // How many numbers each process will receive via Scatterv
+    int* displacements = calloc(process_count, sizeof(int)); // Displacements for Scatterv
     float *vector = NULL;
 
-    if(process_id == mpi_root) {
+    if(process_id == mpi_root) { // Start of main process logic
         int length;
         fputs("Input the vector's length: ",  stdout);
         fflush(stdout);
@@ -49,63 +49,62 @@ int main(int argc, char* argv[]) {
             putc('\n', stdout);
         }
 
-        int base_partition = length / process_count;
-        int remainder = length % process_count;
+        const int base_partition = length / process_count;
+        const int remainder = length % process_count;
 
         // Set the load for each process to a base split
         for(int i = 0; i < process_count; i++) {
-            send_counts[i] = base_partition;
+            receive_counts[i] = base_partition;
         }
 
         // If the load isn't perfectly divisible, distribute the remainder amongst some processes
         int k = remainder;
         int j = -1;
         while(k) {
-            send_counts[j = (j + 1) % process_count]++; // var = (var + 1) % cap increments till cap and wraps around
+            receive_counts[j = (j + 1) % process_count]++; // var = (var + 1) % cap increments till cap and wraps around
             k--;
         }
 
-
         // Displacements calculation for Scatterv
-        for(int i = 1; i < process_count; i++) {
-            displacements[i] = displacements[i - 1] + send_counts[i - 1];
+        for(int i = 1; i < process_count; ++i) {
+            displacements[i] = displacements[i - 1] + receive_counts[i - 1];
         }
 
         // DEBUG
-        puts("========= DEBUG =========");
         printf("Base: %d\nRem: %d\n\n", base_partition, remainder);
 
         puts("Load:");
         for(int i = 0; i < process_count; i++) {
             fflush(stdout);
-            printf("P%d | %d\n", i, send_counts[i]);
+            printf("P%d | %d\n", i, receive_counts[i]);
         }
-        puts("=========================\n");
-
-        free(vector);
-        vector = NULL;
-    } // end of main process logic
+        putc('\n', stdout);
+    } // End of main process logic
 
     // Inform each process how many numbers it is going to receive
-    int n_count;
-    MPI_Scatter(send_counts, 1, MPI_INT, &n_count, 1, MPI_INT, mpi_root, MPI_COMM_WORLD );
+    MPI_Scatter(receive_counts, 1, MPI_INT, &n_count, 1, MPI_INT, mpi_root, MPI_COMM_WORLD );
     float* receive_buffer = calloc(n_count, sizeof(float));
 
-    // Segfault requires fixing, some Scatterv shit happenning
-    // MPI_Barrier(MPI_COMM_WORLD);
-    // MPI_Scatterv(vector, send_counts, displacements, MPI_FLOAT, receive_buffer, n_count,
-    //      MPI_INT, mpi_root, MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Scatterv(vector, receive_counts, displacements, MPI_FLOAT, receive_buffer, n_count,
+        MPI_INT, mpi_root, MPI_COMM_WORLD);
+
+    printf("Rank: %d | n_count: %d\n", process_id, n_count);
+    MPI_Barrier(MPI_COMM_WORLD);
 
     // DEBUG
     // for(int i = 0; i < n_count; i++) {
-    //     printf("Rank: %d | %f\n", process_id, receive_buffer[i]);
+    //       printf("%.2f\n", receive_buffer[i]);
     // }
 
-    free(send_counts);
-    send_counts = NULL;
+    free(receive_counts);
+    receive_counts = NULL;
 
     free(displacements);
     displacements = NULL;
+
+    free(vector);
+    vector = NULL;
 
     free(receive_buffer);
     receive_buffer = NULL;
