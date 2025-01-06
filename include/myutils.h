@@ -1,7 +1,7 @@
 #ifndef MYUTILS_H
 #define MYUTILS_H
 
-int input_sanitizer(const char *buffer, int allow_negative, int allow_float);
+int input_sanitizer(const char *buffer, const int allow_negative, const int allow_float);
 int read_int(int *var, ...);
 int read_float(float *var, ...);
 
@@ -14,7 +14,7 @@ int read_float(float *var, ...);
 /**
  * @brief Provides checks for non-numerics and negatives if validity_check_enabled is true.
  */
-inline int input_sanitizer(const char *buffer, int allow_negative, int allow_float) {
+inline int input_sanitizer(const char *buffer, const int allow_negative, const int allow_float) {
     // In case of empty input, even if NULL macro is not defined
     if(buffer == NULL || *buffer == '\0')
         return 0;
@@ -33,13 +33,15 @@ inline int input_sanitizer(const char *buffer, int allow_negative, int allow_flo
     if(buffer[i] == '\n')
         return 0;
 
+    // Have the dot character pass the check if allow_float is set to true
     for(; buffer[i] != '\n'; i++) {
-        #define FLOAT_CHECK
-        if(allow_float)
-            #define FLOAT_CHECK && (buffer[i] != 0x2e) // 0x2e = '.'
-
-        if(!isdigit(buffer[i]) FLOAT_CHECK)
-            return 0;
+        if(allow_float) {
+            if(!isdigit(buffer[i]) && (buffer[i] != '.'))
+                return 0;
+        } else {
+            if(!isdigit(buffer[i]))
+                return 0;
+        }
     }
 
     return 1;
@@ -64,12 +66,12 @@ inline int read_int(int* var, ...) {
     if(!fgets(buffer, BUFFER_SIZE, stdin))
         return EXIT_FAILURE;
 
-    int validity_check_enabled = va_arg(args, int);
+    const int validity_check_enabled = va_arg(args, int);
     if(validity_check_enabled) {
-        int allow_negative = va_arg(args, int);
+        const int allow_negative = va_arg(args, int);
         char *str = "n";
 
-        if (!allow_negative)
+        if(!allow_negative)
             str = " non-negative";
 
         va_end(args);
@@ -99,9 +101,9 @@ inline int read_float(float* var, ...) {
     if(!fgets(buffer, BUFFER_SIZE, stdin))
         return EXIT_FAILURE;
 
-    int validity_check_enabled = va_arg(args, int);
+    const int validity_check_enabled = va_arg(args, int);
     if(validity_check_enabled) {
-        int allow_negative = va_arg(args, int);
+        const int allow_negative = va_arg(args, int);
         char *str = " f";
 
         if (!allow_negative)
