@@ -5,6 +5,11 @@
 
 #define ROOT_RANK 0 // rank of the main process
 
+struct delta_element {
+    float num;
+    int index;
+};
+
 int main(int argc, char* argv[]) {
     // Initialize MPI
     MPI_Init(&argc, &argv);
@@ -128,31 +133,74 @@ int main(int argc, char* argv[]) {
     MPI_Bcast(&vector_mean, 1, MPI_FLOAT, ROOT_RANK, MPI_COMM_WORLD);
 
     // Variance subsection calculation, aka (Xn - m)^2, for all the values in the receive_buffer of each process
-    float variance_sub = 0;
+    float variance_subsection = 0;
     for(int i = 0; i < n_count; i++) {
         float x = receive_buffer[i] - vector_mean;
+        // DEBUG
         // printf("p%d: %.3f - %.3f = %.3f\n", process_id, receive_buffer[i], vector_mean, x);
-        variance_sub += x * x;
+        variance_subsection += x * x;
     }
 
     float variance;
     // Gathering back all the subsections and summing them to divide the resulting sum by n
-    MPI_Reduce(&variance_sub, &variance, 1, MPI_FLOAT, MPI_SUM, ROOT_RANK, MPI_COMM_WORLD);
+    MPI_Reduce(&variance_subsection, &variance, 1, MPI_FLOAT, MPI_SUM, ROOT_RANK, MPI_COMM_WORLD);
     if(process_id == ROOT_RANK) {
         variance = variance / (float) length;
         printf("Variance: %.3f\n", variance);
     }
 
+    // DEBUG
     //printf("p%d | Min: %.3f | Max: %.3f\n", process_id, vector_min, vector_max);
 
-    float* delta = calloc(length, sizeof(float));
+    // Calculating the value of each element of the delta vector, as well as their offsets
+    struct delta_element* delta_subsection = malloc(sizeof(struct delta_element) * n_count);
     for(int i = 0; i < n_count; i++) {
-        float d = ((receive_buffer[i] - vector_min) / (vector_max - vector_min)) * 100;
-        int delta_idx = process_id + (length * i);
+        delta_subsection[i].num = ((receive_buffer[i] - vector_min) / (vector_max - vector_min)) * 100;
+        delta_subsection[i].index = process_id + (length * i);
     }
 
-    // for(int i = 0; i < length; i++) {
-    //     printf("%.3f ", delta[i]);
+    // DEBUG
+    MPI_Barrier(MPI_COMM_WORLD);
+    printf("p%d: d = %.3f | idx = %d\n", process_id, delta_subsection[0].num, delta_subsection[0].index);
+
+    /* DEBUG FROM HERE ONWARDS */
+
+    // To store the subsections of delta elements gathered from the processes
+    // struct delta_element* gather_subsections = malloc(sizeof(struct delta_element) * length);
+    //
+    // // Create MPI datatype for delta_element
+    // MPI_Datatype delta_struct;
+    // int blocklengths[] = {1, 1};
+    // MPI_Datatype types[] = {MPI_FLOAT, MPI_INT};
+    // MPI_Aint offsets[2];
+    //
+    // // Calculate offsets
+    // MPI_Aint base_address, address_1, address_2;
+    // struct delta_element dummy;
+    //
+    // MPI_Get_address(&dummy, &base_address);
+    // MPI_Get_address(&dummy.num, &address_1);
+    // MPI_Get_address(&dummy.index, &address_2);
+    //
+    // offsets[0] = address_1 - base_address;
+    // offsets[1] = address_2 - base_address;
+    //
+    // // Create and commit the datatype
+    // MPI_Type_create_struct(2, blocklengths, offsets, types, &delta_struct);
+    // MPI_Type_commit(&delta_struct);
+    //
+    // MPI_Gather(delta_subsection, n_count, delta_struct, gather_subsections, n_count,
+    //     delta_struct, ROOT_RANK, MPI_COMM_WORLD);
+    //
+    // float* delta = calloc(length, sizeof(float));
+    // if(process_id == ROOT_RANK) {
+    //     for(int i = 0; i < length; i++) {
+    //         delta[gather_subsections[i].index] = gather_subsections[i].num;
+    //     }
+    //
+    //     for(int i = 0; i < length; i++) {
+    //         printf("%.3f ", delta[i]);
+    //     }
     // }
 
     free(receive_counts);
@@ -167,8 +215,14 @@ int main(int argc, char* argv[]) {
     free(receive_buffer);
     receive_buffer = NULL;
 
-    free(delta);
-    delta = NULL;
+    // free(delta);
+    // delta = NULL;
+    //
+    // free(gather_subsections);
+    // gather_subsections = NULL;
+
+    free(delta_subsection);
+    delta_subsection = NULL;
 
     MPI_Finalize();
     return EXIT_SUCCESS;
