@@ -110,7 +110,6 @@ int main(int argc, char* argv[]) {
     float* temp = calloc(n_count, sizeof(float));
     memcpy(temp, receive_buffer, n_count * sizeof(float));
 
-
     // Get the min, max and the sum of values held by the processes
     MPI_Reduce(receive_buffer, &vector_min, n_count, MPI_FLOAT, MPI_MIN, ROOT_RANK, MPI_COMM_WORLD);
     MPI_Reduce(temp, &vector_max, n_count, MPI_FLOAT, MPI_MAX, ROOT_RANK, MPI_COMM_WORLD);
