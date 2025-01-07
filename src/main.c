@@ -110,6 +110,7 @@ int main(int argc, char* argv[]) {
     float* temp = calloc(n_count, sizeof(float));
     memcpy(temp, receive_buffer, n_count * sizeof(float));
 
+
     // Get the min, max and the sum of values held by the processes
     MPI_Reduce(receive_buffer, &vector_min, n_count, MPI_FLOAT, MPI_MIN, ROOT_RANK, MPI_COMM_WORLD);
     MPI_Reduce(temp, &vector_max, n_count, MPI_FLOAT, MPI_MAX, ROOT_RANK, MPI_COMM_WORLD);
@@ -118,11 +119,20 @@ int main(int argc, char* argv[]) {
     free(temp);
     temp = NULL;
 
+    // Prints to be moved, here for reference
+    float vector_mean = vector_sum / (float) length;
     if(process_id == ROOT_RANK) {
         printf("Min: %.3f\n", vector_min);
         printf("Max: %.3f\n", vector_max);
-        printf("Average: %.3f\n", vector_sum / (float) length);
+        printf("Mean: %.3f\n", vector_mean);
     }
+
+    // float variance_subpart = 0;
+    // for(int i = 0; i < n_count; i++) {
+    //     float x = receive_buffer[i] - vector_mean;
+    //     printf("pow %.3f\n", x);
+    //     variance_subpart += x * x;
+    // }
 
     free(receive_counts);
     receive_counts = NULL;
