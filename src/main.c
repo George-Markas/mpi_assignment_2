@@ -5,7 +5,6 @@
 
 #define ROOT_RANK 0 // rank of the main process
 
-
 int main(int argc, char* argv[]) {
     // Initialize MPI
     MPI_Init(&argc, &argv);
@@ -94,6 +93,7 @@ int main(int argc, char* argv[]) {
     MPI_Scatterv(vector, receive_counts, displacements, MPI_FLOAT, receive_buffer, n_count,
         MPI_INT, ROOT_RANK, MPI_COMM_WORLD);
 
+    // DEBUG
     //printf("Rank: %d | n_count: %d\n", process_id, n_count);
     MPI_Barrier(MPI_COMM_WORLD);
 
@@ -102,9 +102,6 @@ int main(int argc, char* argv[]) {
     for(int i = 0; i < n_count; i++) {
         partition_sum += receive_buffer[i];
     }
-
-    // DEBUG
-    // printf("%d) Part sum: %.3f\n", process_id, partition_sum);
 
     float vector_sum, vector_max, vector_min;
 
@@ -120,19 +117,15 @@ int main(int argc, char* argv[]) {
     free(temp);
     temp = NULL;
 
+    // Calculate mean
     float vector_mean;
-    if(process_id == ROOT_RANK) {
+    if(process_id == ROOT_RANK)
         vector_mean = vector_sum / (float) length;
-        // printf("Min: %.3f\n", vector_min);
-        // printf("Max: %.3f\n", vector_max);
-        // printf("Mean: %.3f\n\n", vector_mean);
-    }
 
-    // Sending the mean value to all non-root processes since they don't have access to length to calculate it
+    // Sending the min, max and mean to non-root processes to be used for later calcualtions
+    MPI_Bcast(&vector_min, 1, MPI_FLOAT, ROOT_RANK, MPI_COMM_WORLD);
+    MPI_Bcast(&vector_max, 1, MPI_FLOAT, ROOT_RANK, MPI_COMM_WORLD);
     MPI_Bcast(&vector_mean, 1, MPI_FLOAT, ROOT_RANK, MPI_COMM_WORLD);
-
-    // MPI_Barrier(MPI_COMM_WORLD);
-    //printf("p%d: %.2f\n", process_id, vector_mean);
 
     // Variance subsection calculation, aka (Xn - m)^2, for all the values in the receive_buffer of each process
     float variance_sub = 0;
@@ -141,16 +134,26 @@ int main(int argc, char* argv[]) {
         // printf("p%d: %.3f - %.3f = %.3f\n", process_id, receive_buffer[i], vector_mean, x);
         variance_sub += x * x;
     }
-    // printf("Sub%d: %.2f\n", process_id, variance_subspart);
 
     float variance;
     // Gathering back all the subsections and summing them to divide the resulting sum by n
     MPI_Reduce(&variance_sub, &variance, 1, MPI_FLOAT, MPI_SUM, ROOT_RANK, MPI_COMM_WORLD);
     if(process_id == ROOT_RANK) {
-        printf("Variance pre division: %.3f\n", variance);
         variance = variance / (float) length;
-        printf("Variance post division: %.3f\n", variance);
+        printf("Variance: %.3f\n", variance);
     }
+
+    //printf("p%d | Min: %.3f | Max: %.3f\n", process_id, vector_min, vector_max);
+
+    float* delta = calloc(length, sizeof(float));
+    for(int i = 0; i < n_count; i++) {
+        float d = ((receive_buffer[i] - vector_min) / (vector_max - vector_min)) * 100;
+        int delta_idx = process_id + (length * i);
+    }
+
+    // for(int i = 0; i < length; i++) {
+    //     printf("%.3f ", delta[i]);
+    // }
 
     free(receive_counts);
     receive_counts = NULL;
@@ -163,6 +166,9 @@ int main(int argc, char* argv[]) {
 
     free(receive_buffer);
     receive_buffer = NULL;
+
+    free(delta);
+    delta = NULL;
 
     MPI_Finalize();
     return EXIT_SUCCESS;
