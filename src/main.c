@@ -1,8 +1,10 @@
 #define MYUTILS_IMPLEMENTATION
+#include <math.h>
 #include "myutils.h"
 #include "mpi.h"
 
 #define ROOT_RANK 0 // rank of the main process
+
 
 int main(int argc, char* argv[]) {
     // Initialize MPI
@@ -72,14 +74,15 @@ int main(int argc, char* argv[]) {
         }
 
         // DEBUG
-        printf("Base: %d\nRem: %d\n\n", base_partition, remainder);
+        // printf("Base: %d\nRem: %d\n\n", base_partition, remainder);
+        //
+        // puts("Load:");
+        // for(int i = 0; i < process_count; i++) {
+        //     fflush(stdout);
+        //     printf("P%d | %d\n", i, receive_counts[i]);
+        // }
+        // putc('\n', stdout);
 
-        puts("Load:");
-        for(int i = 0; i < process_count; i++) {
-            fflush(stdout);
-            printf("P%d | %d\n", i, receive_counts[i]);
-        }
-        putc('\n', stdout);
     }
 
     // Inform each process how many numbers it is going to receive
@@ -101,9 +104,8 @@ int main(int argc, char* argv[]) {
     }
 
     // DEBUG
-    printf("%d) Part sum: %.3f\n", process_id, partition_sum);
+    // printf("%d) Part sum: %.3f\n", process_id, partition_sum);
 
-    // Gather all the partition sums and sum the up
     float vector_sum, vector_max, vector_min;
 
     // Using a temporary copy of receive_buffer to avoid undefined behaviour on subsequent reductions
@@ -119,19 +121,27 @@ int main(int argc, char* argv[]) {
     temp = NULL;
 
     // Prints to be moved, here for reference
-    float vector_mean = vector_sum / (float) length;
+    float vector_mean;
     if(process_id == ROOT_RANK) {
-        printf("Min: %.3f\n", vector_min);
-        printf("Max: %.3f\n", vector_max);
-        printf("Mean: %.3f\n", vector_mean);
+        vector_mean = vector_sum / (float) length;
+        // printf("Min: %.3f\n", vector_min);
+        // printf("Max: %.3f\n", vector_max);
+        printf("Mean: %.3f\n\n", vector_mean);
     }
 
-    // float variance_subpart = 0;
-    // for(int i = 0; i < n_count; i++) {
-    //     float x = receive_buffer[i] - vector_mean;
-    //     printf("pow %.3f\n", x);
-    //     variance_subpart += x * x;
-    // }
+    // Sending the mean value to all non-root processes since they don't have access to length to calculate it
+    MPI_Bcast(&vector_mean, 1, MPI_FLOAT, ROOT_RANK, MPI_COMM_WORLD);
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    //printf("p%d: %.2f\n", process_id, vector_mean);
+
+    float variance_subspart = 0;
+    for(int i = 0; i < n_count; i++) {
+        float x = receive_buffer[i] - vector_mean;
+        // printf("p%d: %.3f - %.3f = %.3f\n", process_id, receive_buffer[i], vector_mean, x);
+        variance_subspart += x * x;
+    }
+    // printf("Sub%d: %.2f\n", process_id, variance_subspart);
 
     free(receive_counts);
     receive_counts = NULL;
@@ -144,6 +154,7 @@ int main(int argc, char* argv[]) {
 
     free(receive_buffer);
     receive_buffer = NULL;
+
 
     MPI_Finalize();
     return EXIT_SUCCESS;
