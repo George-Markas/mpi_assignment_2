@@ -5,10 +5,12 @@ set(CMAKE_C_STANDARD 11)
 
 set(SOURCES
     src/main.c
+    src/menu.c
 )
 
 set(HEADERS
     include/myutils.h
+    include/menu.h
 )
 
 # Add MPI Package to Project
